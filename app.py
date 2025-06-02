@@ -1,4 +1,4 @@
-from flask import Flask, render_template, Response, redirect, url_for, jsonify, send_from_directory
+from flask import Flask, render_template, Response, redirect, url_for, jsonify, send_from_directory, request
 import os
 import mediapipe as mp
 import cv2
@@ -270,10 +270,32 @@ def detect():
 def get_history():
     return jsonify({'history': sign_lang_conv.history})
 
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames(), 
-                   mimetype='multipart/x-mixed-replace; boundary=frame')
+# @app.route('/video_feed')
+# def video_feed():
+#     return Response(generate_frames(), 
+#                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/process_frame', methods=['POST'])
+def process_frame():
+    if 'frame' not in request.files:
+        return jsonify({'error': 'No frame provided'}), 400
+    
+    file = request.files['frame']
+    
+    # Convert the received image file to a numpy array
+    nparr = np.frombuffer(file.read(), np.uint8)
+    image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    
+    # Process the frame with MediaPipe
+    results = sign_lang_conv.detect_gesture(image)
+    gesture = sign_lang_conv.current_gesture
+    
+    # Return the detected gesture
+    return jsonify({
+        'gesture': gesture if gesture else None,
+        'added_to_history': len(sign_lang_conv.history) > 0 and 
+                           sign_lang_conv.history[-1]['gesture'] == gesture
+    })
 
 @app.route('/clear_history', methods=['POST'])
 def clear_history():
